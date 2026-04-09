@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MC-like Flat World</title>
+<style>
+  body { margin: 0; overflow: hidden; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r152/three.min.js"></script>
+<script>
+// Scene setup
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+// Light
+const light = new THREE.DirectionalLight(0xffffff, 1);
+light.position.set(10, 20, 10);
+scene.add(light);
+scene.add(new THREE.AmbientLight(0x888888));
+
+// Texture placeholders (replace with your URLs)
+const textures = {
+    grass: new THREE.TextureLoader().load('URL_TO_GRASS_TEXTURE'),
+    dirt: new THREE.TextureLoader().load('URL_TO_DIRT_TEXTURE'),
+    stone: new THREE.TextureLoader().load('URL_TO_STONE_TEXTURE'),
+    bedrock: new THREE.TextureLoader().load('URL_TO_BEDROCK_TEXTURE')
+};
+
+// Create flat world (layers: grass, dirt, stone, bedrock)
+const size = 10; // width/length of world
+const heightLayers = ['grass','dirt','stone','bedrock'];
+for(let y=0; y<heightLayers.length; y++) {
+    for(let i=0; i<size; i++) {
+        for(let j=0; j<size; j++) {
+            const material = new THREE.MeshPhongMaterial({ map: textures[heightLayers[y]] });
+            const cube = new THREE.Mesh(new THREE.BoxGeometry(1,1,1), material);
+            cube.position.set(i, y, j);
+            scene.add(cube);
+        }
+    }
+}
+
+// Player (cube)
+const playerGeometry = new THREE.BoxGeometry(0.8,1.8,0.8);
+const playerMaterial = new THREE.MeshPhongMaterial({ color: 0x00ff00 });
+const player = new THREE.Mesh(playerGeometry, playerMaterial);
+player.position.set(size/2, 4, size/2);
+scene.add(player);
+
+// Camera offset
+const cameraOffset = new THREE.Vector3(0,1.6,5);
+
+// Controls
+let moveForward=false, moveBackward=false, moveLeft=false, moveRight=false, canJump=false;
+const velocity = new THREE.Vector3();
+const direction = new THREE.Vector3();
+const speed = 5;
+const gravity = 9.8;
+let prevTime = performance.now();
+
+// Key events
+document.addEventListener('keydown', e=>{
+    if(e.code==='KeyW') moveForward=true;
+    if(e.code==='KeyS') moveBackward=true;
+    if(e.code==='KeyA') moveLeft=true;
+    if(e.code==='KeyD') moveRight=true;
+    if(e.code==='Space' && canJump) { velocity.y=5; canJump=false; }
+});
+document.addEventListener('keyup', e=>{
+    if(e.code==='KeyW') moveForward=false;
+    if(e.code==='KeyS') moveBackward=false;
+    if(e.code==='KeyA') moveLeft=false;
+    if(e.code==='KeyD') moveRight=false;
+});
+
+// Simple floor collision
+function checkCollision() {
+    if(player.position.y <= 4) { // standing on top layer
+        velocity.y = 0;
+        player.position.y = 4;
+        canJump = true;
+    }
+}
+
+// Mouse look (optional)
+let rotation = { x:0, y:0 };
+document.addEventListener('mousemove', e=>{
+    rotation.y -= e.movementX*0.002;
+    rotation.x -= e.movementY*0.002;
+    rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, rotation.x));
+});
+
+// Animation loop
+function animate() {
+    requestAnimationFrame(animate);
+
+    const time = performance.now();
+    const delta = (time - prevTime)/1000;
+
+    velocity.x -= velocity.x * 10.0 * delta;
+    velocity.z -= velocity.z * 10.0 * delta;
+    velocity.y -= gravity * delta;
+
+    direction.z = Number(moveForward) - Number(moveBackward);
+    direction.x = Number(moveRight) - Number(moveLeft);
+    direction.normalize();
+
+    if(moveForward || moveBackward) velocity.z -= direction.z * speed * delta;
+    if(moveLeft || moveRight) velocity.x -= direction.x * speed * delta;
+
+    // Update position
+    player.position.x += velocity.x;
+    player.position.y += velocity.y * delta;
+    player.position.z += velocity.z;
+
+    checkCollision();
+
+    // Camera follow
+    const cameraPosition = player.position.clone().add(cameraOffset.clone().applyAxisAngle(new THREE.Vector3(0,1,0), rotation.y));
+    camera.position.lerp(cameraPosition, 0.1);
+    camera.lookAt(player.position.clone().add(new THREE.Vector3(0,1,0)));
+
+    renderer.render(scene, camera);
+    prevTime = time;
+}
+animate();
+
+window.addEventListener('resize', ()=>{
+    camera.aspect = window.innerWidth/window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>
